@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hytale Web Prototype</title>
+  <style>
+    /* Add this for our animated chat and new UI overlays */
+    #server-hud {
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      color: white;
+      text-shadow: 1px 1px 2px black;
+      font-family: sans-serif;
+      text-align: right;
+      z-index: 5;
+    }
+
+    @keyframes popIn {
+      0% {
+        transform: translate(-50%, 100%);
+        opacity: 0;
+      }
+
+      100% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes popOut {
+      0% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+      }
+
+      100% {
+        transform: translate(-50%, 100%);
+        opacity: 0;
+      }
+    }
+
+    #sign-ui {
+      display: none;
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 15, 10, 0.9);
+      color: #fce6c5;
+      padding: 20px 40px;
+      border-radius: 8px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 24px;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 1000;
+      text-align: center;
+      border: 4px solid #6b4c3a;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), inset 0 0 10px rgba(0, 0, 0, 0.8);
+      min-width: 400px;
+      max-width: 800px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    #sign-ui.show {
+      display: block;
+      animation: popIn 0.3s ease-out forwards;
+    }
+
+    #sign-ui.hide {
+      display: block;
+      animation: popOut 0.3s ease-in forwards;
+    }
+
+    #sign-cursor {
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="inventory-tooltip"
+    style="display: none; position: absolute; background: rgba(0,0,0,0.85); color: white; padding: 8px 12px; border-radius: 6px; pointer-events: none; z-index: 9999; font-family: sans-serif; font-size: 16px; border: 1px solid rgba(255,255,255,0.2); text-shadow: 1px 1px 2px black;">
+  </div>
+  <div id="app"></div>
+  <div id="ui">
+    <div id="server-hud">
+      <div id="hud-server-name" style="font-size: 1.2rem; font-weight: bold;">My Local Server</div>
+      <div id="hud-server-status" style="font-size: 0.9rem; opacity: 0.8; color: #fca5a5;">Private Mode</div>
+    </div>
+
+    <div id="scoreboard"
+      style="display: none; position: absolute; top: 10%; left: 50%; transform: translateX(-50%); width: 400px; background: rgba(15, 23, 42, 0.85); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 8px; font-family: sans-serif; color: white; padding: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100;">
+      <h2
+        style="text-align: center; margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">
+        Connected Players</h2>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="text-align: left; opacity: 0.7; font-size: 0.9rem;">
+            <th style="padding-bottom: 8px;">Player</th>
+            <th style="padding-bottom: 8px; text-align: right;">Ping</th>
+          </tr>
+        </thead>
+        <tbody id="scoreboard-list">
+          <!-- Filled via JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div id="instructions">
+      <strong>Controls</strong>
+      <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> Move<br>
+      <kbd>Space</kbd> Jump / Fly Up<br>
+      <kbd>Shift</kbd> Fly Down<br>
+      <kbd>F</kbd> Toggle Fly<br>
+      <kbd>Left Click</kbd> Break Block<br>
+      <kbd>Right Click</kbd> Place Block<br>
+      <kbd>1-9</kbd> Select Hotbar Slot<br>
+      <kbd>Scroll</kbd> Cycle Hotbar<br>
+      <kbd>I</kbd> Inventory<br>
+      <kbd>M</kbd> Toggle Minimap<br>
+      <kbd>Q</kbd> Admin Menu<br>
+      <kbd>Shift+Scroll</kbd> Brightness<br>
+      <kbd>Arrows</kbd> / <kbd>Shift+Arrows</kbd> Nudge Last Block<br>
+      <kbd>R</kbd> Rotate Last Block<br>
+      <kbd>P</kbd> Toggle Paint (Admin)
+    </div>
+
+    <div id="chat-container">
+      <div id="chat-messages"></div>
+      <input type="text" id="chat-input" placeholder="" autocomplete="off" maxlength="100">
+    </div>
+
+    <div class="hotbar" id="hotbar">
+      <div class="hotbar-slot active" data-slot="0">1</div>
+      <div class="hotbar-slot" data-slot="1">2</div>
+      <div class="hotbar-slot" data-slot="2">3</div>
+      <div class="hotbar-slot" data-slot="3">4</div>
+      <div class="hotbar-slot" data-slot="4">5</div>
+      <div class="hotbar-slot" data-slot="5">6</div>
+      <div class="hotbar-slot" data-slot="6">7</div>
+      <div class="hotbar-slot" data-slot="7">8</div>
+      <div class="hotbar-slot" data-slot="8">9</div>
+    </div>
+
+    <!-- Sign UI -->
+    <div id="sign-ui">
+      <span id="sign-text"></span><span id="sign-cursor">_</span>
+    </div>
+  </div>
+
+  <canvas id="minimap" width="200" height="200"
+    style="position: absolute; bottom: 24px; right: 24px; border-radius: 50%; border: 4px solid rgba(15,23,42,0.8); z-index: 15; box-shadow: 0 10px 30px rgba(0,0,0,0.5); pointer-events: none; transition: transform 0.3s; transform: scale(1); transform-origin: bottom right;"></canvas>
+
+  <div id="inventory-menu" class="overlay hidden" style="z-index: 150;">
+    <h1 style="font-size: 3rem; margin-bottom: 2rem;">INVENTORY</h1>
+    <div
+      style="margin-bottom: 1rem; background: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 8px; display: inline-flex; align-items: center; gap: 15px;">
+      <span style="font-size: 1.2rem; font-weight: bold;">Neon & Paint Color:</span>
+      <input type="color" id="inventory-color-picker" value="#00ffff"
+        style="width: 50px; height: 50px; cursor: pointer; border: none; border-radius: 8px; background: transparent;">
+    </div>
+    <div
+      style="background: rgba(15,23,42,0.9); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); width: 80%; max-width: 800px; height: 60%; overflow-y: auto;">
+      <div id="inventory-container" style="display: flex; flex-direction: column; gap: 20px;">
+        <!-- Filled via JS -->
+      </div>
+    </div>
+    <p style="margin-top: 2rem;">Click an item to place it in your active hotbar slot. Press <kbd>I</kbd> or
+      <kbd>Esc</kbd> to close.
+    </p>
+  </div>
+
+  <!-- Start Overlay -->
+  <div class="overlay" id="start-overlay">
+    <h1>HYTALE CLONE</h1>
+    <p>A procedural voxel sandbox built with Three.js. Explore, build, and survive in an infinite world.</p>
+    <input type="text" id="player-name-input" placeholder="Enter your name..." maxlength="16"
+      style="margin-top: 1rem; margin-bottom: 2rem; padding: 12px 20px; font-size: 1.2rem; border-radius: 8px; border: 2px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white; text-align: center; width: 300px; outline: none;">
+    <button class="play-btn" id="play-btn">ENTER WORLD</button>
+  </div>
+
+  <!-- Q Menu -->
+  <div id="q-menu" class="overlay hidden" style="z-index: 200;">
+    <h1 style="font-size: 3rem; margin-bottom: 2rem;">TOOLS & SETTINGS</h1>
+
+    <div
+      style="display: flex; gap: 40px; margin-bottom: 2rem; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 12px; color: white;">
+      <div>
+        <h3>Tool Mode</h3>
+        <select id="tool-mode"
+          style="padding: 10px; font-size: 1.1rem; border-radius: 8px; background: #1e293b; color: white; border: 1px solid #334155;">
+          <option value="standard">Standard Placement</option>
+          <option value="offset">Offset Mode (Sub-Grid)</option>
+          <option value="paint">Face Paint Mode</option>
+          <option value="sniper">Voxel Sniper</option>
+        </select>
+      </div>
+
+      <div id="sniper-settings"
+        style="opacity: 0.3; pointer-events: none; transition: opacity 0.3s; padding-left: 20px; border-left: 2px solid #334155;">
+        <h3>Sniper Settings</h3>
+        <div style="margin-bottom: 10px;">
+          Shape:
+          <select id="sniper-shape"
+            style="padding: 5px; background: #1e293b; color: white; border: 1px solid #334155; border-radius: 4px;">
+            <option value="sphere">Sphere</option>
+            <option value="line">Line Ray</option>
+            <option value="disc">Disc</option>
+            <option value="triangle">Pyramid</option>
+          </select>
+        </div>
+        <div style="margin-bottom: 10px;">
+          Brush:
+          <select id="sniper-brush"
+            style="padding: 5px; background: #1e293b; color: white; border: 1px solid #334155; border-radius: 4px;">
+            <option value="erode">Erode</option>
+            <option value="splatter">Splatter</option>
+            <option value="overlay">Overlay</option>
+            <option value="replace">Replace</option>
+          </select>
+        </div>
+        <div id="sniper-replace-settings"
+          style="display: none; margin-bottom: 10px; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 4px;">
+          <div style="margin-bottom: 5px;">
+            Target:
+            <select id="sniper-replace-target"
+              style="padding: 2px; background: #1e293b; color: white; border: 1px solid #334155; border-radius: 4px; max-width: 100px;"></select>
+          </div>
+          <div>
+            With:
+            <select id="sniper-replace-with"
+              style="padding: 2px; background: #1e293b; color: white; border: 1px solid #334155; border-radius: 4px; max-width: 100px;"></select>
+          </div>
+        </div>
+        <div>
+          Radius: <input type="range" id="sniper-radius" min="1" max="15" value="2" style="vertical-align: middle;">
+          <span id="radius-val" style="font-weight: bold;">2</span>
+        </div>
+      </div>
+      <div>
+        <h3>World Settings</h3>
+        <div style="margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+          <label>Time of Day: <span id="time-val">12:00</span></label><br>
+          <input type="range" id="time-slider" min="0" max="2400" value="1200" style="width: 100%;">
+
+          <br><br>
+          <label>Render Distance: <span id="render-dist-val">3 Chunks</span></label><br>
+          <input type="range" id="render-dist-slider" min="2" max="16" value="3" style="width: 100%;">
+
+          <br><br>
+          <label>Flight Speed: <span id="flight-val">1.5x</span></label><br>
+          <input type="range" id="flight-slider" min="5" max="50" value="15" style="width: 100%;">
+
+          <br><br>
+          <label>Ambient Light: <span id="light-val">1.2</span></label><br>
+          <input type="range" id="light-slider" min="0" max="30" value="12" style="width: 100%;">
+
+          <br><br>
+          <label>Volume: <span id="volume-val">50%</span></label><br>
+          <input type="range" id="volume-slider" min="0" max="100" value="50" style="width: 100%;">
+
+          <br><br>
+          <label style="color: #fca5a5; font-weight: bold;"><input type="checkbox" id="admin-mode-toggle"> Enable Admin
+            Mode</label>
+
+          <br><br>
+          <label>Custom Sounds (Optional)</label><br>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+            <div>Jump: <input type="file" id="sound-jump" accept="audio/*" style="width:100px; font-size: 0.8rem;">
+            </div>
+            <div>Place: <input type="file" id="sound-place" accept="audio/*" style="width:100px; font-size: 0.8rem;">
+            </div>
+            <div>Break: <input type="file" id="sound-break" accept="audio/*" style="width:100px; font-size: 0.8rem;">
+            </div>
+            <div>Door: <input type="file" id="sound-door" accept="audio/*" style="width:100px; font-size: 0.8rem;">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="multiplayer-settings" style="border-left: 2px solid #334155; padding-left: 20px;">
+        <h3>World Persistence (Server)</h3>
+        <button id="btn-save-server"
+          style="margin-top: 10px; width: 100%; padding: 8px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Save
+          to Server Folder</button>
+        <button id="btn-load-server"
+          style="margin-top: 10px; width: 100%; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Load
+          from Server Folder</button>
+
+        <h3 style="margin-top: 20px;">Local Backup</h3>
+        <button id="btn-save-world"
+          style="margin-top: 10px; width: 100%; padding: 8px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Export
+          World to File</button>
+        <input type="file" id="input-load-world" accept=".json" style="display: none;">
+        <button id="btn-load-world"
+          style="margin-top: 10px; margin-bottom: 20px; width: 100%; padding: 8px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;"
+          onclick="document.getElementById('input-load-world').click()">Import World File</button>
+
+        <h3>Multiplayer</h3>
+        <label>Server Name:<br>
+          <input type="text" id="server-name-input" value="My Local Server"
+            style="width: 100%; padding: 5px; margin-top: 5px; margin-bottom: 10px; background: #1e293b; color: white; border: 1px solid #334155; border-radius: 4px;">
+        </label>
+        <label style="color: #6ee7b7; font-weight: bold; margin-bottom: 5px; display: block;">
+          <input type="checkbox" id="public-server-toggle"> Open Server to Public
+        </label>
+        <p style="opacity: 0.7; margin-top: 5px; font-size: 0.9rem;">Click a player to teleport</p>
+        <div id="player-list"
+          style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;">
+          <div style="opacity: 0.5;">No other players connected.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <h1 style="font-size: 2rem; margin-bottom: 1rem;">BLOCK COLOR</h1>
+    <input type="color" id="neon-color-picker" value="#00ffff"
+      style="width: 150px; height: 80px; cursor: pointer; border: none; border-radius: 12px; margin-bottom: 2rem; background: transparent; box-shadow: 0 0 20px rgba(0,255,255,0.4);"
+      title="Block Color">
+    <p>Select settings, then press <kbd>Q</kbd> to return.</p>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
